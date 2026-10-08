@@ -1,7 +1,5 @@
-import axios from 'axios';
-
 export default async function handler(req, res) {
-    // السماح بالاتصال من أي مكان (CORS)
+    // إعدادات CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,40 +9,41 @@ export default async function handler(req, res) {
     }
 
     try {
-        // استخراج البيانات سواء كانت جاية من Query (GET) أو Body (POST)
+        // قراءة البيانات من GET أو POST
         const prompt = req.query.prompt || req.body?.prompt;
         const isPremium = req.query.premium === 'true' || req.body?.isPremium === true;
-        const mode = req.query.mode || req.body?.mode || 'chat';
 
         if (!prompt) {
             return res.status(400).json({
                 status: false,
-                error: "يرجى إرسال نص الطلب عبر المعامل prompt"
+                error: "برجاء إرسال نص الطلب عبر prompt"
             });
         }
 
-        // تحديد نمط التفكير (عادي / بريميوم خارق)
-        let systemPrompt = "";
-        if (isPremium) {
-            systemPrompt = "[KIRO ULTRA AI]: أنت الذكاء الاصطناعي الأشمل والأقوى KIRO ULTRA. قم بتحليل الطلب بعمق شديد، واكتب حلولاً برمجية وأكواداً كاملة 100% بدون أي اختصار، وبأسلوب قوي وفحل.";
-        } else {
-            systemPrompt = "[KIRO AI]: أنت KIRO AI، مساعد ذكي وسريع ومباشر. أجب على السؤال بدقة وبشكل خفيف.";
-        }
+        // إعداد الـ Prompt
+        let systemPrompt = isPremium 
+            ? "[KIRO ULTRA AI]: أنت الذكاء الاصطناعي الخارق KIRO ULTRA. قم بتحليل الطلب بعمق واكتب حلولاً برمجية كاملة 100% بدون اختصار."
+            : "[KIRO AI]: أنت KIRO AI، مساعد ذكي وسريع ومباشر. أجب على السؤال بدقة باختصار.";
 
-        // طلب الرد من المحرك المجاني
-        const aiResponse = await axios.post('https://text.pollinations.ai/', {
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: prompt }
-            ],
-            model: isPremium ? 'openai' : 'mistral',
-            jsonMode: false
-        }, {
+        // استخدام fetch المدمج في Node.js
+        const aiResponse = await fetch('https://text.pollinations.ai/', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            timeout: 25000
+            body: JSON.stringify({
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: prompt }
+                ],
+                model: isPremium ? 'openai' : 'mistral',
+                jsonMode: false
+            })
         });
 
-        const resultText = typeof aiResponse.data === 'string' ? aiResponse.data : JSON.stringify(aiResponse.data);
+        if (!aiResponse.ok) {
+            throw new Error(`Pollinations API responded with status: ${aiResponse.status}`);
+        }
+
+        const resultText = await aiResponse.text();
 
         return res.status(200).json({
             status: true,
@@ -57,7 +56,7 @@ export default async function handler(req, res) {
     } catch (error) {
         return res.status(500).json({
             status: false,
-            error: "حدث خطأ أثناء معالجة الطلب عبر سيرفر Vercel"
+            error: error.message || "حدث خطأ داخل دالة السيرفر"
         });
     }
-                  }
+}
